@@ -39,8 +39,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           driver: docker-container
-          platforms: linux/arm64
-            
+
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
@@ -54,9 +53,10 @@ jobs:
           registry-type: public
 
       - name: Build and push to DockerHub
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/lambda-playwright-python:latest
@@ -65,16 +65,22 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Verify DockerHub multi-arch manifest
+        run: |
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/lambda-playwright-python:v${{ env.IMAGE_TAG }}"
+          docker buildx imagetools inspect "$IMAGE" 2>&1 | tee /tmp/inspect.txt
+          grep -q 'linux/amd64' /tmp/inspect.txt && grep -q 'linux/arm64' /tmp/inspect.txt || (echo "Missing platform in manifest" && exit 1)
+
       - name: Build and push to Amazon ECR Public
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             public.ecr.aws/${{ env.ECR_REPOSITORY }}:latest
             public.ecr.aws/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
             public.ecr.aws/${{ env.ECR_REPOSITORY }}:v${{ env.IMAGE_TAG }}
-          platforms: linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
