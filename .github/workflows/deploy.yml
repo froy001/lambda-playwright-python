@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 env:
-  IMAGE_TAG: 0.1.${{ github.run_number }}
+  IMAGE_TAG: 0.2.${{ github.run_number }}
 
 permissions:
   contents: write   # Required for release-action
