@@ -23,8 +23,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Determine ECR push
+        id: ecr
+        env:
+          AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+        run: echo "enabled=$([ -n \"$AWS_ROLE_ARN\" ] && echo 'true' || echo 'false')" >> "$GITHUB_OUTPUT"
+
       - name: Configure AWS Credentials
-        if: ${{ secrets.AWS_ROLE_ARN != '' }}
+        if: steps.ecr.outputs.enabled == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -48,7 +54,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Login to Amazon ECR Public
-        if: ${{ secrets.AWS_ROLE_ARN != '' }}
+        if: steps.ecr.outputs.enabled == 'true'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
         with:
@@ -74,7 +80,7 @@ jobs:
           grep -q 'linux/amd64' /tmp/inspect.txt && grep -q 'linux/arm64' /tmp/inspect.txt || (echo "Missing platform in manifest" && exit 1)
 
       - name: Build and push to Amazon ECR Public
-        if: ${{ secrets.AWS_ROLE_ARN != '' }}
+        if: steps.ecr.outputs.enabled == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
