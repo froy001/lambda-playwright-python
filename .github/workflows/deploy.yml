@@ -24,12 +24,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
+        if: secrets.AWS_ROLE_ARN != ''
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: deployrolesession
           aws-region: ${{ env.AWS_REGION }}
-        
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
@@ -47,6 +48,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Login to Amazon ECR Public
+        if: secrets.AWS_ROLE_ARN != ''
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
         with:
@@ -72,6 +74,7 @@ jobs:
           grep -q 'linux/amd64' /tmp/inspect.txt && grep -q 'linux/arm64' /tmp/inspect.txt || (echo "Missing platform in manifest" && exit 1)
 
       - name: Build and push to Amazon ECR Public
+        if: secrets.AWS_ROLE_ARN != ''
         uses: docker/build-push-action@v6
         with:
           context: .
