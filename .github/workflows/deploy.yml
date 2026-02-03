@@ -7,14 +7,10 @@ on:
     branches: [ main ]
 
 env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: j9p6g6v0/lambda-playwright-python
-  IMAGE_TAG: 0.1.${{ github.run_number }}
+  IMAGE_TAG: 0.2.${{ github.run_number }}
 
-# permissions required for release and assuming the role
 permissions:
-  id-token: write   # This is required for requesting the JWT
-  contents: write   # This is required for actions/checkout/releases
+  contents: write   # Required for release-action
 
 jobs:
   build-and-push:
@@ -23,13 +19,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: deployrolesession
-          aws-region: ${{ env.AWS_REGION }}
-        
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
@@ -39,24 +28,18 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           driver: docker-container
-          platforms: linux/arm64
-            
+
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to Amazon ECR Public
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-        with:
-          registry-type: public
-
       - name: Build and push to DockerHub
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/lambda-playwright-python:latest
@@ -65,18 +48,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push to Amazon ECR Public
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: |
-            public.ecr.aws/${{ env.ECR_REPOSITORY }}:latest
-            public.ecr.aws/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-            public.ecr.aws/${{ env.ECR_REPOSITORY }}:v${{ env.IMAGE_TAG }}
-          platforms: linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Verify DockerHub multi-arch manifest
+        run: |
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/lambda-playwright-python:v${{ env.IMAGE_TAG }}"
+          docker buildx imagetools inspect "$IMAGE" 2>&1 | tee /tmp/inspect.txt
+          grep -q 'linux/amd64' /tmp/inspect.txt && grep -q 'linux/arm64' /tmp/inspect.txt || (echo "Missing platform in manifest" && exit 1)
 
       - name: Create Release
         uses: ncipollo/release-action@v1
